@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>Food Map — Ẩm thực Hà Nội</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+<style>
+:root { --bg:#fffaf5; --accent:#c97; --ink:#3b2f2f; --highlight:#ffeb3b; }
+html, body, #wrap { height:100%; margin:0; }
+body { font-family:"Segoe UI", Roboto, Arial; background:var(--bg); color:var(--ink); }
+#wrap { display:flex; height:100%; }
+#sidebar {
+  width:320px; min-width:240px; max-width:360px;
+  padding:16px; box-sizing:border-box;
+  border-right:6px solid rgba(0,0,0,0.05);
+  background:linear-gradient(180deg,#fff,#fff8f0);
+  overflow:auto;
+}
+#search { width:100%; padding:8px; margin-bottom:12px; border-radius:6px; border:1px solid #ccc; font-size:13px; }
+.item { display:flex; gap:12px; align-items:center; padding:10px; border-radius:10px; margin-bottom:10px;
+       background:rgba(255,255,255,0.7); cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,0.04); transition:0.2s;}
+.item:hover { transform:translateY(-3px) scale(1.02); }
+.thumb { width:64px; height:64px; border-radius:8px; object-fit:cover; flex:0 0 64px; border:2px solid var(--accent);}
+.meta { flex:1; }
+.meta h3 { margin:0; font-size:15px; }
+.meta p { margin:6px 0 0 0; font-size:13px; color:#6b5a4a; }
+.highlight { background:var(--highlight); }
+#map { flex:1; }
+.leaflet-popup-content { border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,0.2); text-align:center; }
+.leaflet-popup-content img { max-width:220px; border-radius:8px; margin:6px auto; display:block; }
+.emoji-icon { font-size:34px; text-align:center; animation: bounce 0.6s infinite; }
+@keyframes bounce { 0%,100%{transform:translateY(0);} 50%{transform:translateY(-6px);} }
+.guide-icon { font-size:40px; animation: float 1.2s infinite; }
+@keyframes float { 0%,100%{transform:translateY(0);} 50%{transform:translateY(-8px);} }
+.btn { display:inline-block; padding:6px 10px; border-radius:8px; background:var(--accent); color:white; text-decoration:none; font-size:13px; margin-top:8px;}
+footer{font-size:12px;color:#8a7568;margin-top:8px;}
+@media(max-width:720px){ #sidebar{width:42%; min-width:200px; position:absolute; z-index:1000; height:100%; }}
+</style>
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+</head>
+<body>
+<div id="wrap">
+  <aside id="sidebar">
+    <h1>Food Map — Hồn phố cổ Hà Nội</h1>
+    <p class="lead">Click 1 món để xem vị trí, video review và câu chuyện ngắn.</p>
+    <input type="text" id="search" placeholder="Tìm món ăn...">
+
+    <!-- Danh sách món ăn -->
+    <div class="item" data-id="banh-cuon">
+      <img class="thumb" src="images/banh_cuon.jpg" alt="Bánh cuốn">
+      <div class="meta"><h3>Bánh cuốn Thanh Trì</h3><p>Vị mềm mượt, chấm nước mắm chua ngọt.</p></div>
+    </div>
+    <div class="item" data-id="com">
+      <img class="thumb" src="images/com_la.jpg" alt="Cốm Làng Vòng">
+      <div class="meta"><h3>Cốm Làng Vòng</h3><p>Hương thu Hà Nội, thơm nhẹ, hạt cốm dẹt.</p></div>
+    </div>
+    <div class="item" data-id="bun-thang">
+      <img class="thumb" src="images/bun_thang.jpg" alt="Bún thang">
+      <div class="meta"><h3>Bún thang</h3><p>Thanh tao, cầu kỳ, món ăn dịp sum họp.</p></div>
+    </div>
+    <div class="item" data-id="che-lam">
+      <img class="thumb" src="images/che_lam.jpg" alt="Chè lam">
+      <div class="meta"><h3>Chè lam Thạch Xá</h3><p>Ngọt dẻo, mùi gừng, món quà quê.</p></div>
+    </div>
+    <div class="item" data-id="cha-ca">
+      <img class="thumb" src="images/cha_ca.jpg" alt="Chả cá Lã Vọng">
+      <div class="meta"><h3>Chả cá Lã Vọng</h3><p>Chả cá nướng thơm, ăn kèm bún và lạc rang.</p></div>
+    </div>
+    <div class="item" data-id="banh-tom">
+      <img class="thumb" src="images/banh_tom.jpg" alt="Bánh tôm Hồ Tây">
+      <div class="meta"><h3>Bánh tôm Hồ Tây</h3><p>Bánh tôm giòn rụm, ăn kèm rau sống và nước chấm.</p></div>
+    </div>
+    <div class="item" data-id="bun-cha">
+      <img class="thumb" src="images/bun_cha.jpg" alt="Bún chả Hà Nội">
+      <div class="meta"><h3>Bún chả Hà Nội</h3><p>Thịt nướng thơm, nước chấm đặc trưng, ăn cùng bún.</p></div>
+    </div>
+
+    <footer>
+      <div class="small">Thay ảnh trong <code>/images/</code> và link video/audio trong mảng foods.</div>
+    </footer>
+  </aside>
+  <div id="map"></div>
+</div>
+
+<script>
+const foods = [
+  {id:'banh-cuon', title:'Bánh cuốn Thanh Trì', coords:[21.0015,105.8394], img:'images/banh_cuon.jpg', desc:'Bánh cuốn mỏng, nhân nấm/rau, ăn kèm chả và nước mắm chua ngọt.', video:'https://www.youtube.com/embed/VIDEO_ID_1'},
+  {id:'com', title:'Cốm Làng Vòng', coords:[21.0278,105.8342], img:'images/com_la.jpg', desc:'Cốm dẹt, thơm mùi lúa non, biểu tượng mùa thu Hà Nội.', video:'https://www.youtube.com/embed/VIDEO_ID_2'},
+  {id:'bun-thang', title:'Bún thang', coords:[21.0355,105.8461], img:'images/bun_thang.jpg', desc:'Món bún cầu kỳ với nước dùng thanh và nhiều topping mỏng.', video:'https://www.youtube.com/embed/VIDEO_ID_3'},
+  {id:'che-lam', title:'Chè lam Thạch Xá', coords:[21.0944,105.8081], img:'images/che_lam.jpg', desc:'Món kẹo truyền thống, dẻo dẻo, mùi gừng, thường là quà quê.', video:'https://www.youtube.com/embed/VIDEO_ID_4'},
+  {id:'cha-ca', title:'Chả cá Lã Vọng', coords:[21.0280,105.8510], img:'images/cha_ca.jpg', desc:'Chả cá nướng thơm, ăn kèm bún và lạc rang.', video:'https://www.youtube.com/embed/VIDEO_ID_5'},
+  {id:'banh-tom', title:'Bánh tôm Hồ Tây', coords:[21.0620,105.8310], img:'images/banh_tom.jpg', desc:'Bánh tôm giòn rụm, ăn kèm rau sống và nước chấm.', video:'https://www.youtube.com/embed/VIDEO_ID_6'},
+  {id:'bun-cha', title:'Bún chả Hà Nội', coords:[21.0370,105.8340], img:'images/bun_cha.jpg', desc:'Thịt nướng thơm, nước chấm đặc trưng, ăn cùng bún.', video:'https://www.youtube.com/embed/VIDEO_ID_7'}
+];
+
+const emojis = {
+  'banh-cuon':'🥟','com':'🌾','bun-thang':'🍜','che-lam':'🍬',
+  'cha-ca':'🐟','banh-tom':'🍤','bun-cha':'🍖'
+};
+
+/* INIT MAP */
+const map = L.map('map').setView([21.0285,105.8542],12);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'&copy; OpenStreetMap contributors'}).addTo(map);
+
+/* MARKERS */
+const markers = {};
+foods.forEach(f=>{
+  const icon = L.divIcon({html:`<div class="emoji-icon">${emojis[f.id]}</div>`, iconSize:[36,36], iconAnchor:[18,18]});
+  const popup = `<div>
+    <h3 style="color:#5b3d2e">${f.title}</h3>
+    <img src="${f.img}" />
+    <p style="font-size:13px;color:#6b5a4a">${f.desc}</p>
+    <iframe width="220" height="124" src="${f.video}" frameborder="0" allowfullscreen style="margin-top:8px;border-radius:6px;"></iframe>
+  </div>`;
+  markers[f.id] = L.marker(f.coords,{icon}).addTo(map).bindPopup(popup);
+});
+
+/* GUIDE CUTE */
+const guideMarker = L.marker([21.0285,105.8542],{
+  icon: L.divIcon({html:'🧑‍🍳', className:'guide-icon', iconSize:[40,40], iconAnchor:[20,40]})
+}).addTo(map);
+guideMarker.bindPopup('<div><strong>Chào bạn!</strong><br>Mình dẫn bạn khám phá món ăn 🥰</div>').openPopup();
+
+/* SIDEBAR CLICK */
+document.querySelectorAll('.item').forEach(el=>{
+  el.addEventListener('click',()=>{
+    const id = el.getAttribute('data-id');
+    const f = foods.find(x=>x.id===id);
+    if(!f) return;
+    map.flyTo(f.coords,15,{duration:1.2});
+    markers[id].openPopup();
+    // guide move
+    guideMarker.setLatLng([f.coords[0]-0.001,f.coords[1]+0.001]);
+    guideMarker.bindPopup(`<div>Chúng ta đang đến <strong>${f.title}</strong> 🍴</div>`).openPopup();
+  });
+});
+
+/* SEARCH + HIGHLIGHT */
+document.getElementById('search').addEventListener('input', e=>{
+  const q = e.target.value.toLowerCase();
+  document.querySelectorAll('.item').forEach(el=>{
+    const titleEl = el.querySelector('h3');
+    const title = titleEl.textContent.toLowerCase();
+    const id = el.getAttribute('data-id');
+    // reset highlight
+    titleEl.innerHTML = titleEl.textContent;
+    if(title.includes(q) && q!==''){ 
+      el.style.display='flex'; 
+      markers[id].addTo(map); 
+      // highlight
+      const regex = new RegExp(`(${q})`, 'gi');
+      titleEl.innerHTML = titleEl.textContent.replace(regex,'<span class="highlight">$1</span>');
+    }
+    else if(q===''){ 
+      el.style.display='flex'; 
+      markers[id].addTo(map);
+    }
+    else{ 
+      el.style.display='none'; 
+      map.removeLayer(markers[id]); 
+    }
+  });
+});
+
+/* FIT BOUNDS */
+const group = new L.featureGroup(Object.values(markers));
+map.fitBounds(group.getBounds().pad(0.2));
+</script>
+</body>
+</html>
